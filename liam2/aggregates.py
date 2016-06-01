@@ -2,6 +2,7 @@
 from __future__ import print_function
 
 import numpy as np
+import larray as la
 
 from expr import (Variable, BinaryOp, getdtype, expr_eval,
                   ispresent, FunctionExpr, always, firstarg_dtype)
@@ -42,7 +43,10 @@ class Count(FunctionExpr):
             # first
             if not np.issubdtype(filter.dtype, bool):
                 raise ValueError("count filter must be a boolean expression")
-            return np.sum(filter)
+            if isinstance(filter, la.LArray):
+                return filter.sum()
+            else:
+                return np.sum(filter)
 
     dtype = always(int)
 

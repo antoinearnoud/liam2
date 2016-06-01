@@ -45,8 +45,8 @@ class Choice(NumpyRandom):
             # possibilities (there is no shortcut when the value is found).
             # It might be faster to rewrite this using numba + np.digitize
             # for each individual (assuming it has a low setup overhead).
-            # if isinstance(p, list) and any(isinstance(px, la.LArray) for px in p):
-            #     p = [np.asarray(px) for px in p]
+            if isinstance(p, list) and any(isinstance(px, la.LArray) for px in p):
+                p = [np.asarray(px) for px in p]
             ap = np.asarray(p)
             cdf = ap.cumsum(axis=0)
 

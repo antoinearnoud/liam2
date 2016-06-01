@@ -104,6 +104,7 @@ class Simulation(object):
             'periodic': None,  # either full-blown (dict) description or list
                                # of fields
             '*': {
+                'autoindex': None, # str or [str],
                 'path': str,
                 'type': str,
                 'fields': [{

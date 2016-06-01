@@ -15,6 +15,7 @@ import warnings
 
 import numpy as np
 import numexpr as ne
+import larray as la
 try:
     from PyQt4 import QtGui, QtCore
     QtAvailable = True
@@ -221,7 +222,7 @@ def ndim(arraylike):
     sequence of arrays and array of sequences.
     """
     n = 0
-    while isinstance(arraylike, (list, tuple, np.ndarray)):
+    while isinstance(arraylike, (list, tuple, np.ndarray, la.LArray)):
         if len(arraylike) == 0:
             raise ValueError('Cannot compute ndim of array with empty dim')
         # XXX: check that other elements have the same length?
@@ -389,7 +390,7 @@ class Axis(object):
         return len(self.labels)
 
 
-class LabeledArray(np.ndarray):
+class LabeledArrayCrap(np.ndarray):
     # noinspection PyNoneFunctionAssignment
     def __new__(cls, input_array, dim_names=None, pvalues=None,
                 row_totals=None, col_totals=None):
@@ -420,7 +421,7 @@ class LabeledArray(np.ndarray):
                 raise Exception('size of col totals vector (%s) does not '
                                 'match array shape (%s)' % (len(col_totals),
                                                             width))
-        obj.dim_names = dim_names
+        obj.axes.names = dim_names
         obj.pvalues = pvalues
         obj.row_totals = row_totals
         obj.col_totals = col_totals
@@ -428,17 +429,17 @@ class LabeledArray(np.ndarray):
 
     @property
     def axes(self):
-        if self.dim_names is None or self.pvalues is None:
+        if self.axes.names is None or self.pvalues is None:
             return []
         else:
             return [Axis(name, labels)
-                    for name, labels in zip(self.dim_names, self.pvalues)]
+                    for name, labels in zip(self.axes.names, self.pvalues)]
 
     def __getitem__(self, key):
         obj = np.ndarray.__getitem__(self, key)
-        # I am unsure under which conditions obj is not a LabeledArray, but
+        # I am unsure under which conditions obj is not a la.LArray, but
         # it *can* happen.
-        if obj.ndim > 0 and isinstance(obj, LabeledArray):
+        if obj.ndim > 0 and isinstance(obj, la.LArray):
             if isinstance(key, (tuple, list)):
                 # complete the key if needed
                 if len(key) < self.ndim:
@@ -448,7 +449,7 @@ class LabeledArray(np.ndarray):
                 if any(isinstance(dim_key, np.ndarray) and dim_key.shape
                        for dim_key in key):
                     obj.pvalues = None
-                    obj.dim_names = None
+                    obj.axes.names = None
                 else:
                     # int key => dimension disappears & pvalues are discarded
                     # slice key => dimension (and pvalues) stays
@@ -460,32 +461,32 @@ class LabeledArray(np.ndarray):
                         # convert empty list to None (if all dim keys were int)
                         if not obj.pvalues:
                             obj.pvalues = None
-                    if self.dim_names is not None:
-                        names = self.dim_names
-                        obj.dim_names = [name
+                    if self.axes.names is not None:
+                        names = self.axes.names
+                        obj.axes.names = [name
                                          for name, dim_key in zip(names, key)
                                          if isinstance(dim_key, slice)]
                         # convert empty list to None (if all dim keys were int)
-                        if not obj.dim_names:
-                            obj.dim_names = None
+                        if not obj.axes.names:
+                            obj.axes.names = None
             elif isinstance(key, slice):
                 obj.pvalues = [self.pvalues[0][key]] + [self.pvalues[1:]]
             # handle fancy indexing (for a 1d array)
             elif isinstance(key, np.ndarray):
-                obj.dim_names = None
+                obj.axes.names = None
                 obj.pvalues = None
             else:
                 # assert isinstance(key, int), \
                 #        "key: '%s' is of type %s" % (key, type(key))
                 # key is "int-like"
-                obj.dim_names = self.dim_names[1:]
+                obj.axes.names = self.axes.names[1:]
                 obj.pvalues = self.pvalues[1:]
 
             # sanity checks
-            if obj.dim_names is not None:
-                assert len(obj.dim_names) == obj.ndim, \
+            if obj.axes.names is not None:
+                assert len(obj.axes.names) == obj.ndim, \
                        "len(dim_names) (%d) != ndim (%d)" \
-                       % (len(obj.dim_names), obj.ndim)
+                       % (len(obj.axes.names), obj.ndim)
             if obj.pvalues is not None:
                 assert len(obj.pvalues) == obj.ndim, \
                        "len(pvalues) (%d) != ndim (%d)" \
@@ -504,9 +505,9 @@ class LabeledArray(np.ndarray):
 
     def transpose(self, *args):
         res_data = np.asarray(self).transpose(args)
-        res_dim_names = [self.dim_names[i] for i in args]
+        res_dim_names = [self.axes.names[i] for i in args]
         res_pvalues = [self.pvalues[i] for i in args]
-        return LabeledArray(res_data, res_dim_names, res_pvalues)
+        return la.LArray(res_data, res_dim_names, res_pvalues)
 
     # noinspection PyAttributeOutsideInit
     def __array_finalize__(self, obj):
@@ -520,12 +521,12 @@ class LabeledArray(np.ndarray):
         if isinstance(obj, LabeledArray) and self.shape == obj.shape:
             # obj.view(LabeledArray)
             # labeled_arr[:3]
-            self.dim_names = obj.dim_names
+            self.axes.names = obj.axes.names
             self.pvalues = obj.pvalues
             self.row_totals = obj.row_totals
             self.col_totals = obj.col_totals
         else:
-            self.dim_names = None
+            self.axes.names = None
             self.pvalues = None
             self.row_totals = None
             self.col_totals = None
@@ -553,8 +554,8 @@ class LabeledArray(np.ndarray):
         #          |  total |    xx |   xx |    xx
         width = self.shape[-1]
         height = prod(self.shape[:-1])
-        if self.dim_names is not None:
-            result = [self.dim_names +
+        if self.axes.names is not None:
+            result = [self.axes.names +
                       [''] * (width - 1),
                       # 2nd line
                       [''] * (self.ndim - 1) +
@@ -615,20 +616,16 @@ class LabeledArray(np.ndarray):
 
 def aslabeledarray(data):
     sequence = (tuple, list)
-    if isinstance(data, LabeledArray):
+    if isinstance(data, la.LArray):
         return data
     elif (isinstance(data, sequence) and len(data) and
-          isinstance(data[0], LabeledArray)):
-        arraydata = np.asarray(data)
+          isinstance(data[0], la.LArray)):
+        # XXX: use la.stack?
         # TODO: check that all arrays have the same axes
-        dim_names = [None] + data[0].dim_names
-        dim_labels = [range(len(data))] + data[0].pvalues
-        return LabeledArray(arraydata, dim_names, dim_labels)
+        axes = [la.Axis(None, len(data))] + list(data[0].axes)
+        return la.LArray(data, axes)
     else:
-        arraydata = np.asarray(data)
-        dim_names = [None for _ in arraydata.shape]
-        dim_labels = [range(d) for d in arraydata.shape]
-        return LabeledArray(arraydata, dim_names, dim_labels)
+        return la.LArray(data)
 
 
 class ProgressBar(object):

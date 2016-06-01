@@ -5,10 +5,11 @@ import os
 import math
 
 import numpy as np
+import larray as la
 
 import config
 from expr import FunctionExpr
-from utils import (LabeledArray, aslabeledarray, ExceptionOnGetAttr, ndim,
+from utils import (aslabeledarray, ExceptionOnGetAttr, ndim,
                    Axis, FileProducer, QtAvailable)
 
 try:
@@ -74,11 +75,12 @@ class Chart(FunctionExpr, FileProducer):
                 axes = range(data.ndim)
                 data = data.transpose(axes[-1], *axes[:-1])
             elif ndim(data) == ndim_req - 1:
-                if isinstance(data, LabeledArray):
-                    # TODO: implement np.newaxis in LabeledArray.__getitem__
-                    data = LabeledArray(np.asarray(data)[np.newaxis],
-                                        dim_names=['dummy'] + data.dim_names,
-                                        pvalues=[[0]] + data.pvalues)
+                if isinstance(data, la.LArray):
+                    # TODO: implement np.newaxis in LArray.__getitem__
+                    FIXME
+                    data = la.LArray(np.asarray(data)[np.newaxis],
+                                     dim_names=['dummy'] + data.axes.names,
+                                     pvalues=[[0]] + data.pvalues)
                 else:
                     data = data[np.newaxis]
             else:
@@ -239,7 +241,7 @@ class Plot(Chart):
         x = np.arange(len(data[0])) + 1
 
         # we use np.asarray to work around missing "newaxis" implementation
-        # in LabeledArray
+        # in la.LArray
         if self.styles is None:
             for array, color in zip(data, colors):
                 kw = dict(color=color)
@@ -256,7 +258,7 @@ class StackPlot(Chart):
     def _draw(self, data, colors, **kwargs):
         x = np.arange(len(data[0])) + 1
         # use np.asarray to work around missing "newaxis" implementation
-        # in LabeledArray
+        # in la.LArray
         plt.stackplot(x, np.asarray(data), colors=colors, **kwargs)
 
 
@@ -310,9 +312,9 @@ class Pie(Chart):
     ndim_req = 1
 
     def _draw(self, data, colors, **kwargs):
-        if isinstance(data, LabeledArray) and data.pvalues:
+        if isinstance(data, la.LArray) and data.pvalues:
             labels = data.pvalues[0]
-            title = data.dim_names[0]
+            title = data.axes.names[0]
         else:
             labels = None
             title = None

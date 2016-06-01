@@ -6,6 +6,7 @@ import os
 import random
 
 import numpy as np
+import larray as la
 
 import config
 from expr import (Variable, UnaryOp, BinaryOp, ComparisonOp, DivisionOp,
@@ -470,6 +471,8 @@ def _mul(a, b):
 
 class ExtExpr(CompoundExpression):
     def __init__(self, fname):
+        # to initialize .args, .kwargs, .original_args, ...
+        CompoundExpression.__init__(self)
         data = load_ndarray(os.path.join(config.input_directory, fname))
 
         # TODO: handle more dimensions. For that we need to evaluate a
@@ -512,13 +515,13 @@ class ExtExpr(CompoundExpression):
         # in general, we could let user tell explicitly which fields they want
         # to index by (autoindex: period) for periodic
 
-        fields_dim = data.dim_names.index('fields')
+        fields_dim = data.axes.index('fields')
         fields_axis = data.axes[fields_dim]
         self.names = list(fields_axis.labels)
         self.coefs = list(data)
         # needed for compatibility with CompoundExpression
-        self.args = []
-        self.kwargs = []
+        # self.args = []
+        # self.kwargs = []
 
     def build_expr(self, context):
         res = None
@@ -536,6 +539,9 @@ class ExtExpr(CompoundExpression):
             else:
                 res = _plus(res, term)
         return res
+
+    # def __repr__(self):
+    #     return "yada"
 
 
 class Seed(FunctionExpr):
@@ -555,6 +561,13 @@ class Array(FunctionExpr):
 
     # XXX: is this correct?
     dtype = firstarg_dtype
+
+
+class View(FunctionExpr):
+    def compute(self, context, expr):
+        la.view(expr_eval(expr, context))
+
+    dtype = None
 
 
 functions = {
@@ -578,4 +591,5 @@ functions = {
     'extexpr': ExtExpr,
     'seed': Seed,
     'array': Array,
+    'view': View,
 }
